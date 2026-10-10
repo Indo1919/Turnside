@@ -9,3 +9,8 @@ coverage/
 
 # Local research and verification artifacts
 work/
+
+# Hosted build intermediates and local hosting runtime state
+.sites-client/
+.wrangler/
+.sites-state/

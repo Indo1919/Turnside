@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import type { Express, Request, Response } from "express";
 import { hasRealKey, textInput } from "./integrations";
 
@@ -178,15 +179,13 @@ export function installVoiceRoutes(
 
   function fail(error: unknown, res: Response) {
     const known = error instanceof VoiceError;
-    return res
-      .status(known ? error.statusCode : 502)
-      .json({
-        success: false,
-        source: "gemini",
-        error: known
-          ? error.message
-          : "Gemini returned an unreadable audio response. Please try again.",
-      });
+    return res.status(known ? error.statusCode : 502).json({
+      success: false,
+      source: "gemini",
+      error: known
+        ? error.message
+        : "Gemini returned an unreadable audio response. Please try again.",
+    });
   }
 
   app.post("/api/voice/transcribe", async (req, res) => {

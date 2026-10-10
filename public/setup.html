@@ -87,13 +87,28 @@
     <header><img src="/turnside.svg" alt="" />turnside.</header>
     <h1>Bring your connections<br />to life.</h1>
     <p>
-      This guide is for the person running the prototype. The sample
-      conversation, NYC hot areas, calendar export and map work without keys.
+      The shared demo works in your browser: conversation, NYC hot areas,
+      itinerary edits, calendar export and maps need no installation or API
+      keys. This connection guide is for the app owner.
+    </p>
+    <h2>Choose where to configure it</h2>
+    <p>
+      On the hosted app, add credentials as private runtime secrets through the
+      site's owner controls. For a local copy, use
+      <code>.env.local</code> in the app folder and restart the server. Private
+      keys never belong in frontend build variables or source control.
+    </p>
+    <p>
+      No Gemini or Google provider credentials are currently configured. Public
+      NYC inventory and weather are fetched when available; fallback data is
+      labeled. The heatmap measures mapped place density, not live crowds,
+      TikTok popularity or Google search volume.
     </p>
     <h2>1. Connect Gemini</h2>
     <p>
-      Copy <code>.env.example</code> to <code>.env.local</code> in the app
-      folder. Add your private key, then restart the app.
+      Set these runtime values on the hosted app. Locally, copy
+      <code>.env.example</code> to <code>.env.local</code>, add your private key
+      and restart the app.
     </p>
     <pre>
 GEMINI_API_KEY=your_private_key
@@ -116,6 +131,11 @@ GEMINI_TTS_VOICE=Kore</pre>
       Flash; Listen uses Gemini 3.8 Flash TTS. Account/model access and provider
       credits are required.</small
     >
+    <p>
+      Hosted live AI requires native ChatGPT sign-in before using provider
+      credits. Use the app's <strong>Sign in to use Gemini</strong> link. The
+      public demo remains available without sign-in.
+    </p>
     <h2>2. Resolve live places and routes</h2>
     <p>
       Enable Places API (New) and Routes API in your Google Cloud project, then
@@ -130,11 +150,19 @@ GEMINI_TTS_VOICE=Kore</pre>
     </p>
     <h2>3. Enable the full Google basemap (optional)</h2>
     <p>
-      The free Google Maps viewer is already included. For Google Maps with
+      The keyless Google Maps viewer is already included. For Google Maps with
       custom pins and area overlays, enable Maps JavaScript API and use a
       separate browser key restricted to the app origin.
     </p>
     <pre>GOOGLE_MAPS_BROWSER_KEY=your_restricted_browser_key</pre>
+    <h2>4. Keep chosen places consistent</h2>
+    <p>
+      Hosted planning uses a private
+      <code>RECOMMENDATION_SIGNING_SECRET</code> of at least 32 random
+      characters. It signs short-lived selections so another server instance can
+      build the day from the places you chose. The hosted secret is already
+      configured; local copies can omit it.
+    </p>
     <aside>
       Provider configuration is not a verified connection. Test search, voice
       and places with your account before a live demo. No ticket purchase or

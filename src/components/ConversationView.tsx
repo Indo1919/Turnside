@@ -27,6 +27,7 @@ import type { useLiveConversation } from "../live/useLiveConversation";
 export function ConversationView({
   city,
   connected,
+  signInRequired,
   messages,
   input,
   onInput,
@@ -54,6 +55,7 @@ export function ConversationView({
 }: {
   city: string;
   connected: boolean;
+  signInRequired?: boolean;
   messages: { sender: string; text: string; source?: string }[];
   input: string;
   onInput: (s: string) => void;
@@ -391,6 +393,16 @@ export function ConversationView({
                 </p>
               )}
             </>
+          ) : signInRequired ? (
+            <a
+              className="start-live"
+              href="/signin-with-chatgpt?returnTo=%2F"
+              target="_top"
+            >
+              <AudioLines size={18} />
+              <span>Sign in to use Gemini</span>
+              <ArrowRight size={16} />
+            </a>
           ) : (
             <button className="start-live" onClick={onStartLive}>
               <AudioLines size={18} />

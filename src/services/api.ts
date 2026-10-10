@@ -24,6 +24,7 @@ export interface ProviderStatus {
   voice?: string;
 }
 export interface ServerConfig {
+  requiresAiSignIn?: boolean;
   defaultMapboxToken: string;
   hasGeminiKey: boolean;
   hasVoiceKey?: boolean;
@@ -36,6 +37,7 @@ export interface ServerConfig {
   providers?: Record<string, ProviderStatus>;
 }
 export interface PlanParams {
+  selectionReceipt?: string;
   destination: string;
   vibe?: string;
   durationDays: number;
@@ -186,9 +188,7 @@ export function computeStopWeather(
   };
 }
 
-export async function generateTripPlanResponse(
-  params: PlanParams,
-): Promise<{
+export async function generateTripPlanResponse(params: PlanParams): Promise<{
   success: boolean;
   data: TripPlan;
   source: string;
@@ -325,9 +325,7 @@ export async function fetchGooglePlaceDetails(params: {
   ).place;
 }
 
-export async function fetchHeatmapTelemetry(
-  city = "New York",
-): Promise<{
+export async function fetchHeatmapTelemetry(city = "New York"): Promise<{
   nodes: HeatmapNode[];
   events: HeatTelemetryEvent[];
   source?: string;

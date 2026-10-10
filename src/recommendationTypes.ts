@@ -50,6 +50,7 @@ export interface DiscoverParams {
   forceDemo?: boolean;
 }
 export interface RecommendationResponse {
+  selectionReceipt?: string;
   success: boolean;
   reply: string;
   recommendations: Recommendation[];

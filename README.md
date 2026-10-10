@@ -2,7 +2,13 @@
 
 A conversation-first trip and day planner. The NYC demo includes an animated neighborhood density map, visual place cards with sources, an editable itinerary, and a coherent white, Apple-blue, coral and mint brand system.
 
-## Open the prototype
+## Open the app
+
+The hosted app runs the same conversation, neighborhood discovery, itinerary and calendar flows in a browser on another computer. Viewers do not install Node.js or supply API keys. The public demo uses editorial recommendations, public NYC inventory data, Open-Meteo weather and keyless maps. Live Gemini planning and voice require the owner to configure private runtime credentials; public hosted AI also requires native ChatGPT sign-in.
+
+The hosting build serves the client and API together. It does not turn the app into a static site with missing backend routes. A deployment URL is supplied after a successful publish.
+
+## Run locally
 
 On this Mac, double-click `start.command`, then open **http://localhost:4173**. This workspace already has dependencies and a production build.
 
@@ -15,7 +21,7 @@ pnpm build
 pnpm start
 ```
 
-Copy `.env.example` to `.env.local`; `PORT=4173` keeps the same URL. Without a port setting the server uses 3000. `pnpm dev` starts development. Internet access is needed for map tiles, public datasets, weather and Google Maps.
+Copy `.env.example` to `.env.local`; `PORT=4173` keeps the same URL. Without a port setting the server uses 3000. `pnpm dev` starts development. Internet access is needed for map tiles, public datasets, weather and Google Maps. The local server remains available independently of hosting.
 
 ## A two-minute walkthrough
 
@@ -28,12 +34,14 @@ Copy `.env.example` to `.env.local`; `PORT=4173` keeps the same URL. Without a p
 
 ## Connect Gemini and Google
 
-Open **http://localhost:4173/setup.html** for the connection guide. Keep all private keys in `.env.local`, then restart the server. Never paste a private key into this browser app or use a `VITE_*` variable.
+Open **/setup.html** on the app's origin for the connection guide. Locally, keep private keys in `.env.local` and restart the server. For hosting, the site owner adds private keys as runtime secrets, never to frontend build variables or the source archive. Never paste a private key into this browser app or use a `VITE_*` variable.
 
 - `GEMINI_API_KEY` enables grounded typed conversation and **Talk with Gemini**, the real Gemini Live voice session with captions, mute, interruption, reconnect, and discovery/planning tools. Adding the key enables live conversation by default; Settings can switch typed planning back to Demo.
 - Recorded microphone input is transcribed with **Gemini 3.8 Flash**. The transcript can be reviewed before sending. **Listen** generates WAV speech through **Gemini 3.8 Flash TTS** (`gemini-3.8-flash-tts`). Live conversation uses `gemini-3.8-live`. Voice requires a real key and uses provider credits even while typed planning is in Demo.
 - Private `GOOGLE_MAPS_SERVER_KEY` (or separate Places/Routes keys) provides authoritative place coordinates, reviews, hours and street routes. Grounded citations without resolved locations remain explorable but cannot be scheduled.
 - Optional, restricted `GOOGLE_MAPS_BROWSER_KEY` enables the full custom Google basemap and overlays. The intentionally public browser key is separate from private server keys.
+- Hosted live Gemini requests require ChatGPT sign-in before using provider credits. The native **Sign in to use Gemini** link handles this; Turnside does not collect account passwords.
+- `RECOMMENDATION_SIGNING_SECRET` signs short-lived selections so a chosen recommendation can be validated by a different hosted server instance. Use a private random value of at least 32 characters. It is configured as a hosted runtime secret; local setup can omit it.
 
 Provider keys have not been configured during delivery, so real Gemini/Places/Routes sessions remain unverified. The app does not substitute browser speech or pretend a sample response is Gemini.
 
@@ -47,7 +55,7 @@ The neighborhood panels contain 14 editorial picks checked against first-party v
 
 ## Brand assets
 
-Open **http://localhost:4173/brand-kit/index.html**. The kit includes primary/reversed wordmarks, blue/monochrome symbols, a cover, typography, colors, spacing, components, voice guidance, and reusable JSON/CSS tokens. The app and kit share the same core palette.
+Open **/brand-kit/index.html** on the app's origin. The kit includes primary/reversed wordmarks, blue/monochrome symbols, a cover, typography, colors, spacing, components, voice guidance, and reusable JSON/CSS tokens. The app and kit share the same core palette.
 
 ## Verification and teammate integration
 
@@ -55,14 +63,17 @@ Open **http://localhost:4173/brand-kit/index.html**. The kit includes primary/re
 pnpm lint
 pnpm test
 pnpm build
+pnpm verify:site
 ```
 
-The delivered version passes **64 automated checks**, TypeScript validation and a production build. GitHub Actions runs the same checks on pushes and pull requests, using the committed dependency lockfile. Browser QA covered conversation → selected places → itinerary, hot-area cards/evidence → add a detour, the keyless Google viewer, and desktop/400px phone layouts. The initial app bundle is split from map code. Mocked provider tests verify contracts and cleanup, not account connectivity.
+`pnpm build` produces the client in `dist/` and a portable Fetch-based server in `dist/server/index.js`. `pnpm build:client` builds only the client for local development. `pnpm verify:site` checks the combined hosting artifact, assets and API behavior. Private environment values are runtime bindings and are excluded from the hosted bundle.
+
+GitHub Actions runs the checks on pushes and pull requests, using the committed dependency lockfile. Browser QA covered conversation → selected places → itinerary, hot-area cards/evidence → add a detour, the keyless Google viewer, and desktop/400px phone layouts. The initial app bundle is split from map code. Mocked provider tests verify contracts and cleanup, not account connectivity.
 
 The supplied Sidequest project informed the grounded recommendations → Places → Routes architecture and secure Live voice flow. These fit the existing React/Express app; its separate database/worker stack was not imported. See `INTEGRATIONS.md` for contracts and official references.
 
 ## Scope before a public launch
 
-This is a high-fidelity local prototype with a production build, not a deployed booking service. A public release still needs account authentication, user-scoped storage, provider/account verification, deployment controls and licensed production map access. Automatic ticket inventory, purchase/refund handling and payment processing are not integrated; current ticket actions hand off to the official provider.
+This is a high-fidelity prototype with a deployable client and API. Hosted paid AI has an identity gate; user-scoped cloud storage, provider/account verification and licensed production map access still need work before a commercial launch. Automatic ticket inventory, purchase/refund handling and payment processing are not integrated; current ticket actions hand off to the official provider.
 
 The archive includes source, tests, brand assets and the built app. It excludes private environment files, installed dependencies and temporary verification artifacts. Install dependencies before launching an extracted copy.

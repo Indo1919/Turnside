@@ -101,6 +101,7 @@ function readableError(error: unknown): string {
 export function useLiveConversation(options: LiveConversationOptions) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const selectionReceipt = useRef<string>(undefined);
   const discoveredDestination =
     useRef<RecommendationResponse["destination"]>(undefined);
   const mounted = useRef(true);
@@ -163,6 +164,7 @@ export function useLiveConversation(options: LiveConversationOptions) {
     output.current = null;
     resumeHandle.current = null;
     discoveredDestination.current = undefined;
+    selectionReceipt.current = undefined;
     if (mounted.current) {
       setSpeaking(false);
       setLevel(0);
@@ -243,6 +245,7 @@ export function useLiveConversation(options: LiveConversationOptions) {
                 return;
               discoveredDestination.current =
                 result.destination || discoveredDestination.current;
+              selectionReceipt.current = result.selectionReceipt;
               optionsRef.current.onDiscovery?.(result);
               // Preserve provider identity, citations and fallback notices in the model result.
               modelResult = {
@@ -276,6 +279,7 @@ export function useLiveConversation(options: LiveConversationOptions) {
                   )
                     ? args.pacing
                     : "balanced",
+                  selectionReceipt: selectionReceipt.current,
                   preferredPlaceIds: Array.isArray(args.preferredPlaceIds)
                     ? args.preferredPlaceIds
                         .filter((id) => typeof id === "string")

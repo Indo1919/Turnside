@@ -1,4 +1,13 @@
-import { createHash } from "node:crypto";
+async function sha256Hex(value: string): Promise<string> {
+  const hash = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return Array.from(new Uint8Array(hash), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+}
+
 import type {
   DiscoverParams,
   Recommendation,
@@ -464,7 +473,7 @@ export async function groundedRecommendations(
           const rec: Recommendation = {
             id: grounded.placeId
               ? `google-${grounded.placeId}`
-              : `google-${createHash("sha256").update(grounded.url).digest("hex").slice(0, 20)}`,
+              : `google-${(await sha256Hex(grounded.url)).slice(0, 20)}`,
             title: grounded.name,
             city,
             category: selectedCategory,

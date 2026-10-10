@@ -289,6 +289,7 @@ export default function App() {
   const [pickedRecommendations, setPickedRecommendations] = useState<string[]>(
     [],
   );
+  const [selectionReceipt, setSelectionReceipt] = useState<string>();
   const [conversationDestination, setConversationDestination] =
     useState<RecommendationResponse["destination"]>();
   const planningCity = conversationDestination?.city || trip.city;
@@ -341,6 +342,7 @@ export default function App() {
   const [calendarZoneDraft, setCalendarZoneDraft] = useState("");
   const [liveToolBusy, setLiveToolBusy] = useState(false);
   function applyRecommendations(result: RecommendationResponse) {
+    setSelectionReceipt(result.selectionReceipt);
     if (result.destination) {
       setConversationDestination(result.destination);
       setDestination(result.destination.city);
@@ -508,7 +510,9 @@ export default function App() {
   useEffect(() => {
     fetchServerConfig().then((c) => {
       setConfig(c);
-      setDemo(!c.hasGeminiKey);
+      setDemo(
+        !c.hasGeminiKey || !!c.requiresAiSignIn || c.defaultAiMode === "demo",
+      );
       if (c.defaultMapboxToken && !mapToken) {
         setMapToken(c.defaultMapboxToken);
         setTokenDraft(c.defaultMapboxToken);
@@ -748,6 +752,7 @@ export default function App() {
       setHotspotId(null);
       setMessages([]);
       setRecommendations([]);
+      setSelectionReceipt(undefined);
       setConversationDestination(undefined);
       setUserLocation(null);
       setPickedRecommendations([]);
@@ -1137,6 +1142,7 @@ export default function App() {
           prompt: notes,
           startDate: trip.days[0].date,
           preferredPlaceIds: pickedRecommendations,
+          selectionReceipt,
           forceDemo: demo,
         }),
         signal: AbortSignal.timeout(40000),
@@ -1230,6 +1236,7 @@ export default function App() {
     const value = clone(INITIAL_TRIP);
     setTrip(value);
     setConversationDestination(undefined);
+    setSelectionReceipt(undefined);
     setRecommendations([]);
     setPickedRecommendations([]);
     setRecommendationSources([]);
@@ -1328,6 +1335,7 @@ export default function App() {
               setRecommendationSources([]);
               setSearchSuggestionsHtml("");
               setRecommendations([]);
+              setSelectionReceipt(undefined);
               setPickedRecommendations([]);
               setInput("");
               navigateSection("conversation");
@@ -1347,6 +1355,7 @@ export default function App() {
             <ConversationView
               city={planningCity}
               connected={!demo && config.hasGeminiKey}
+              signInRequired={config.requiresAiSignIn}
               messages={messages}
               input={input}
               onInput={setInput}
@@ -2705,17 +2714,28 @@ export default function App() {
             </button>
             <button
               className={!demo ? "active" : ""}
-              disabled={!config.hasGeminiKey}
+              disabled={!config.hasGeminiKey || config.requiresAiSignIn}
               onClick={() => setDemo(false)}
             >
               <strong>Live AI</strong>
               <span>
-                {config.hasGeminiKey
-                  ? "Use connected Gemini"
-                  : "Connect Gemini to enable"}
+                {config.requiresAiSignIn
+                  ? "Sign in to use Gemini"
+                  : config.hasGeminiKey
+                    ? "Use connected Gemini"
+                    : "Connect Gemini to enable"}
               </span>
             </button>
           </div>
+          {config.requiresAiSignIn && (
+            <a
+              className="button primary full-button"
+              href="/signin-with-chatgpt?returnTo=%2F"
+              target="_top"
+            >
+              Sign in to use Gemini <ArrowRight size={17} />
+            </a>
+          )}
           <div className="connection-list">
             {[
               {
