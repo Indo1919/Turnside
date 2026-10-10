@@ -2,9 +2,9 @@
 
 A conversation-first trip and day planner. The NYC demo includes an animated neighborhood density map, visual place cards with sources, an editable itinerary, and a coherent white, Apple-blue, coral and mint brand system.
 
-## Open the app
+## Hosting support
 
-The hosted app runs the same conversation, neighborhood discovery, itinerary and calendar flows in a browser on another computer. Viewers do not install Node.js or supply API keys. The public demo uses editorial recommendations, public NYC inventory data, Open-Meteo weather and keyless maps. Live Gemini planning and voice require the owner to configure private runtime credentials; public hosted AI also requires native ChatGPT sign-in.
+The app is on GitHub and has not been published as a hosted website. The prepared hosting build supports the same conversation, neighborhood discovery, itinerary and calendar flows in a browser on another computer. Once published, viewers do not install Node.js or supply API keys. The public demo uses editorial recommendations, public NYC inventory data, Open-Meteo weather and keyless maps. Live Gemini planning and voice require the owner to configure private runtime credentials; public hosted AI also requires native ChatGPT sign-in.
 
 The hosting build serves the client and API together. It does not turn the app into a static site with missing backend routes. A deployment URL is supplied after a successful publish.
 
@@ -36,7 +36,7 @@ Copy `.env.example` to `.env.local`; `PORT=4173` keeps the same URL. Without a p
 
 Open **/setup.html** on the app's origin for the connection guide. Locally, keep private keys in `.env.local` and restart the server. For hosting, the site owner adds private keys as runtime secrets, never to frontend build variables or the source archive. Never paste a private key into this browser app or use a `VITE_*` variable.
 
-- `GEMINI_API_KEY` enables grounded typed conversation and **Talk with Gemini**, the real Gemini Live voice session with captions, mute, interruption, reconnect, and discovery/planning tools. Adding the key enables live conversation by default; Settings can switch typed planning back to Demo.
+- `GEMINI_API_KEY` enables grounded typed conversation and **Talk with Gemini**, the real Gemini Live voice session with captions, mute, interruption, reconnect, and discovery/planning tools. Select **Live AI** in Connections for typed planning, or set `AI_MODE=live` as the default. Voice uses the connected provider independently of the typed-planning mode.
 - Recorded microphone input is transcribed with **Gemini 3.8 Flash**. The transcript can be reviewed before sending. **Listen** generates WAV speech through **Gemini 3.8 Flash TTS** (`gemini-3.8-flash-tts`). Live conversation uses `gemini-3.8-live`. Voice requires a real key and uses provider credits even while typed planning is in Demo.
 - Private `GOOGLE_MAPS_SERVER_KEY` (or separate Places/Routes keys) provides authoritative place coordinates, reviews, hours and street routes. Grounded citations without resolved locations remain explorable but cannot be scheduled.
 - Optional, restricted `GOOGLE_MAPS_BROWSER_KEY` enables the full custom Google basemap and overlays. The intentionally public browser key is separate from private server keys.
