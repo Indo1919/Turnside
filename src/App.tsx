@@ -34,6 +34,7 @@ import {
   X,
 } from "lucide-react";
 import { useLiveConversation } from "./live/useLiveConversation";
+import { insertDiscoveryStop } from "./services/scheduleService";
 const MapView = lazy(() =>
   import("./components/MapView").then((m) => ({ default: m.MapView })),
 );
@@ -149,20 +150,16 @@ function dateLabel(
 ) {
   return new Date(`${date}T12:00:00`).toLocaleDateString("en-US", options);
 }
-function minutes(time: string) {
-  const match = time.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-  if (!match) return 600;
-  let h = +match[1];
-  if (match[3]) h = (h % 12) + (match[3].toUpperCase() === "PM" ? 12 : 0);
-  return h * 60 + +match[2];
-}
-function timeLabel(value: number) {
-  const h = Math.floor(value / 60) % 24;
-  return `${String(h % 12 || 12).padStart(2, "0")}:${String(value % 60).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}`;
-}
 function openLink(url?: string) {
-  if (url && /^https:\/\//.test(url))
-    window.open(url, "_blank", "noopener,noreferrer");
+  if (!url) return;
+  try {
+    const target = new URL(url, window.location.origin);
+    if (
+      target.protocol === "https:" ||
+      target.origin === window.location.origin
+    )
+      window.open(target.href, "_blank", "noopener,noreferrer");
+  } catch {}
 }
 function Modal({
   children,
@@ -292,6 +289,14 @@ export default function App() {
   const [pickedRecommendations, setPickedRecommendations] = useState<string[]>(
     [],
   );
+  const [conversationDestination, setConversationDestination] =
+    useState<RecommendationResponse["destination"]>();
+  const planningCity = conversationDestination?.city || trip.city;
+  const mapCity = section === "conversation" ? planningCity : trip.city;
+  const mapCenter =
+    section === "conversation"
+      ? conversationDestination?.center || trip.center
+      : trip.center;
   const [conversationPlace, setConversationPlace] =
     useState<TrendyHotspot | null>(null);
   const [searchSuggestionsHtml, setSearchSuggestionsHtml] = useState("");
@@ -333,8 +338,15 @@ export default function App() {
   const [handoff, setHandoff] = useState<BookingPass | null>(null);
   const [formError, setFormError] = useState("");
   const [shareText, setShareText] = useState("");
+  const [calendarZoneDraft, setCalendarZoneDraft] = useState("");
   const [liveToolBusy, setLiveToolBusy] = useState(false);
   function applyRecommendations(result: RecommendationResponse) {
+    if (result.destination) {
+      setConversationDestination(result.destination);
+      setDestination(result.destination.city);
+      setQuery("");
+      if (result.destination.city !== planningCity) setUserLocation(null);
+    }
     setRecommendations(result.recommendations || []);
     setPickedRecommendations(
       (result.recommendations || [])
@@ -348,7 +360,7 @@ export default function App() {
     if (result.notice) notify(result.notice);
   }
   const live = useLiveConversation({
-    city: trip.city,
+    city: planningCity,
     contextSummary: JSON.stringify({
       date: trip.days[0].date,
       preferences: notes,
@@ -411,20 +423,36 @@ export default function App() {
       p.category === category ||
       (category === "culture" && p.category === "niche"),
   );
-  const searchResults = [
-    ...stops.map((s) => ({
-      id: s.id,
-      name: s.title,
-      category: s.categoryLabel,
-      stop: s,
-    })),
-    ...trip.trendyHotspots.map((s) => ({
-      id: s.id,
-      name: s.name,
-      category: s.badge,
-      spot: s,
-    })),
-  ]
+  const searchItems: {
+    id: string;
+    name: string;
+    category: string;
+    stop?: ItineraryStop;
+    spot?: TrendyHotspot;
+    recommendation?: Recommendation;
+  }[] =
+    section === "conversation"
+      ? recommendations.map((p) => ({
+          id: p.id,
+          name: p.title,
+          category: p.categoryLabel,
+          recommendation: p,
+        }))
+      : [
+          ...stops.map((stop) => ({
+            id: stop.id,
+            name: stop.title,
+            category: stop.categoryLabel,
+            stop,
+          })),
+          ...trip.trendyHotspots.map((spot) => ({
+            id: spot.id,
+            name: spot.name,
+            category: spot.badge,
+            spot,
+          })),
+        ];
+  const searchResults = searchItems
     .filter(
       (p) =>
         query.length > 0 &&
@@ -437,7 +465,7 @@ export default function App() {
     setHeatLoading(true);
     setHeatData(null);
     setSelectedAreaId(null);
-    fetch(`/api/heatmap?city=${encodeURIComponent(trip.city)}`, {
+    fetch(`/api/heatmap?city=${encodeURIComponent(mapCity)}`, {
       signal: controller.signal,
     })
       .then((r) => {
@@ -456,14 +484,14 @@ export default function App() {
         if (!controller.signal.aborted) setHeatLoading(false);
       });
     return () => controller.abort();
-  }, [trip.city, heatRevision]);
+  }, [mapCity, heatRevision]);
   useEffect(() => {
     if (modal !== "google") return;
     let cancelled = false;
     setGoogleDetails(null);
     if (!config.hasGooglePlacesKey) return;
     setGoogleDetailsLoading(true);
-    fetchGooglePlaceDetails({ name: googleQuery, city: trip.city })
+    fetchGooglePlaceDetails({ name: googleQuery, city: mapCity })
       .then((place) => {
         if (!cancelled) setGoogleDetails(place);
       })
@@ -613,7 +641,7 @@ export default function App() {
     }));
   }
   function markDone(stop: ItineraryStop) {
-    let next = stops.map((s) =>
+    let next = day.stops.map((s) =>
       s.id === stop.id ? { ...s, status: "completed" as const } : s,
     );
     const upcoming = next.find((s) => s.status === "upcoming");
@@ -628,9 +656,9 @@ export default function App() {
   function removeStop(stop: ItineraryStop) {
     if (stops.length === 1)
       return notify("Keep at least one place in your day");
-    const next = stops.filter((s) => s.id !== stop.id);
+    const next = day.stops.filter((s) => s.id !== stop.id);
     updateStops(next);
-    setSelectedId(next[0].id);
+    setSelectedId(next.find((s) => s.status !== "skipped")?.id || null);
     notify(`${stop.title} removed from this day`);
   }
   function addDiscovery(spot: TrendyHotspot) {
@@ -641,17 +669,10 @@ export default function App() {
       notify(message);
       return message;
     }
-    const activeIndex = stops.findIndex((s) => s.status === "current");
-    const insertAt = activeIndex < 0 ? stops.length : activeIndex + 1;
-    const start = stops[insertAt]
-      ? minutes(stops[insertAt].time)
-      : minutes(stops[stops.length - 1].time) +
-        stops[stops.length - 1].durationMinutes +
-        15;
     const added: ItineraryStop = {
       id: `${spot.id}-${Date.now()}`,
       title: spot.name,
-      time: timeLabel(start),
+      time: "09:00 AM",
       durationMinutes: spot.durationMinutes || 45,
       category: (Object.keys(CATEGORY_LABELS).includes(spot.category)
         ? spot.category
@@ -672,32 +693,17 @@ export default function App() {
       estimatedCost: spot.estimatedCost || "Check venue details",
       status: "upcoming",
     };
-    const next = [...stops];
-    next.splice(insertAt, 0, added);
-    let cursor = start;
-    for (let i = insertAt; i < next.length; i++) {
-      cursor = Math.max(cursor, minutes(next[i].time));
-      if (cursor + next[i].durationMinutes > 24 * 60) {
-        const message =
-          "Your day is full. Remove a stop before adding this one.";
-        notify(message);
-        return message;
-      }
-      next[i] = {
-        ...next[i],
-        time: timeLabel(cursor),
-        ...(next[i].bookingSlot ? { bookingSlot: timeLabel(cursor) } : {}),
-      };
-      cursor += next[i].durationMinutes + 15;
+    const result = insertDiscoveryStop(day.stops, added);
+    if (!result.ok) {
+      notify(result.message);
+      return result.message;
     }
-    updateStops(next);
+    updateStops(result.stops);
     setSection("plan");
     setHotspotId(null);
     setSelectedId(added.id);
-    const message = `I added ${spot.name} to Day ${dayIndex + 1}${insertAt < stops.length ? " and moved later stops to make room" : " after your existing stops"}. Check the venue’s hours before visiting.`;
-    notify(
-      `${spot.name} added${insertAt < stops.length ? ". Later stops have moved to make room." : " to the end of your day."}`,
-    );
+    const message = `${result.message} Check the venue’s hours before visiting.`;
+    notify(message);
     return message;
   }
   async function shiftSchedule(delay = 30) {
@@ -742,6 +748,8 @@ export default function App() {
       setHotspotId(null);
       setMessages([]);
       setRecommendations([]);
+      setConversationDestination(undefined);
+      setUserLocation(null);
       setPickedRecommendations([]);
       setRecommendationSources([]);
       setSearchSuggestionsHtml("");
@@ -779,7 +787,7 @@ export default function App() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: text,
-            city: trip.city,
+            city: planningCity,
             conversationHistory: messages.slice(-10),
             forceDemo: demo,
             ...(location ? { userLocation: location } : {}),
@@ -793,20 +801,10 @@ export default function App() {
           );
         reply = result.reply;
         replySource = result.source === "gemini" ? "gemini" : "demo";
-        setRecommendations(result.recommendations || []);
-        setPickedRecommendations(
-          (result.recommendations || [])
-            .filter((p: Recommendation) => !!p.coordinates)
-            .slice(0, 4)
-            .map((p: Recommendation) => p.id),
-        );
-        setSearchSuggestionsHtml(result.searchSuggestionsHtml || "");
-        setRecommendationSources(result.sources || []);
+        applyRecommendations(result);
         setNotes(text);
-        setConversationPlace(null);
         if (/popular|trending|hot|spontaneous|nearby/i.test(text))
           setHeatVisible(true);
-        if (result.notice) notify(result.notice);
       } else if (/late|delay|behind/i.test(text)) {
         const number = text.match(/(\d+)\s*(min|minute)/i);
         reply = await shiftSchedule(
@@ -1078,7 +1076,7 @@ export default function App() {
           position.coords.latitude,
         ];
         if (
-          trip.city === "New York" &&
+          /new york|nyc/i.test(planningCity) &&
           (point[0] < -74.3 ||
             point[0] > -73.65 ||
             point[1] < 40.47 ||
@@ -1091,7 +1089,11 @@ export default function App() {
           return;
         }
         setUserLocation(point);
-        setTrip((t) => ({ ...t, center: point }));
+        setConversationDestination((d) => ({
+          ...d,
+          city: planningCity,
+          center: point,
+        }));
         navigateSection("conversation");
         sendChat(
           "Find independent coffee, interesting small shops, and a spontaneous detour near my location. Explain the sources behind each recommendation.",
@@ -1127,7 +1129,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          destination: trip.city,
+          destination: planningCity,
           durationDays: 1,
           pacing: "relaxed",
           travelerNote: notes,
@@ -1227,6 +1229,13 @@ export default function App() {
   function resetDemo() {
     const value = clone(INITIAL_TRIP);
     setTrip(value);
+    setConversationDestination(undefined);
+    setRecommendations([]);
+    setPickedRecommendations([]);
+    setRecommendationSources([]);
+    setSearchSuggestionsHtml("");
+    setConversationPlace(null);
+    setUserLocation(null);
     setSaved([]);
     setSavedLibrary({});
     setLinks([]);
@@ -1234,6 +1243,8 @@ export default function App() {
     setSelectedId("nyc-mcnally");
     setHotspotId(null);
     setSection("plan");
+    setHeatVisible(false);
+    setSelectedAreaId(null);
     setMessages([]);
     setDemo(true);
     setUndoTrip(null);
@@ -1243,6 +1254,10 @@ export default function App() {
   const firstDetour = trip.trendyHotspots.find(
     (p) => !allStops.some((s) => s.title === p.name),
   );
+  let calendarTimeZone: string | undefined;
+  try {
+    calendarTimeZone = itineraryTimezone(trip);
+  } catch {}
   const weatherLive = weather?.source === "open-meteo";
   const selectedTitle =
     conversationPlace?.name || hotspot?.name || selected?.title;
@@ -1330,7 +1345,7 @@ export default function App() {
         <aside className="trip-panel" aria-label="Trip itinerary">
           {section === "conversation" && (
             <ConversationView
-              city={trip.city}
+              city={planningCity}
               connected={!demo && config.hasGeminiKey}
               messages={messages}
               input={input}
@@ -1751,14 +1766,20 @@ export default function App() {
               </div>
             }
           >
-            {googleDerivedTrip &&
-            !config.googleMapsBrowserKey &&
-            (section === "plan" || section === "saved") &&
-            !heatVisible ? (
+            {!config.googleMapsBrowserKey &&
+            ((googleDerivedTrip &&
+              (section === "plan" || section === "saved") &&
+              !heatVisible) ||
+              (section === "conversation" &&
+                recommendations.some((p) => p.source !== "editorial-demo")) ||
+              (section === "conversation" &&
+                conversationDestination &&
+                !conversationDestination.center &&
+                planningCity !== trip.city)) ? (
               <iframe
                 className="google-main-map"
-                title="Your selected places on Google Maps"
-                src={`https://maps.google.com/maps?q=${encodeURIComponent(selected?.title ? `${selected.title}, ${trip.city}` : trip.city)}&z=14&output=embed`}
+                title={`Places in ${mapCity} on Google Maps`}
+                src={`https://maps.google.com/maps?q=${encodeURIComponent(selected?.title && section !== "conversation" ? `${selected.title}, ${mapCity}` : mapCity)}&z=14&output=embed`}
                 referrerPolicy="no-referrer-when-downgrade"
                 allowFullScreen
               />
@@ -1785,7 +1806,7 @@ export default function App() {
                       }
                     : selectHotspot
                 }
-                center={trip.center}
+                center={mapCenter}
                 mapboxToken={mapToken}
                 heatAreas={heatData?.areas || []}
                 heatVisible={heatVisible}
@@ -1815,7 +1836,7 @@ export default function App() {
                       }
                     : selectHotspot
                 }
-                center={trip.center}
+                center={mapCenter}
                 mapboxToken={mapToken}
                 heatAreas={heatData?.areas || []}
                 heatVisible={heatVisible}
@@ -1838,7 +1859,7 @@ export default function App() {
             className="google-map-shortcut glass"
             onClick={() =>
               showGoogle(
-                selectedTitle ? `${selectedTitle}, ${trip.city}` : trip.city,
+                selectedTitle ? `${selectedTitle}, ${mapCity}` : mapCity,
               )
             }
           >
@@ -1903,8 +1924,12 @@ export default function App() {
           <div className="map-search glass">
             <Search size={19} />
             <input
-              aria-label="Search this trip"
-              placeholder={`Search places in ${trip.city}`}
+              aria-label={
+                section === "conversation"
+                  ? "Search recommended places"
+                  : "Search this trip"
+              }
+              placeholder={`Search places in ${mapCity}`}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -1925,11 +1950,13 @@ export default function App() {
                   searchResults.map((r) => (
                     <button
                       key={r.id}
-                      onClick={() =>
-                        "stop" in r
-                          ? selectStop(r.stop!)
-                          : selectHotspot(r.spot!)
-                      }
+                      onClick={() => {
+                        setQuery("");
+                        if (r.recommendation)
+                          previewRecommendation(r.recommendation);
+                        else if (r.stop) selectStop(r.stop);
+                        else if (r.spot) selectHotspot(r.spot);
+                      }}
                     >
                       <MapPin size={16} />
                       <span>
@@ -1966,13 +1993,13 @@ export default function App() {
             {demo ? "Demo experience" : "Live AI mode"}
             <ChevronDown size={12} />
           </button>
-          {section !== "conversation" && (
+          {section !== "conversation" && !detail && !selectedArea && (
             <button
               className="spontaneous-button glass"
               onClick={() => {
                 navigateSection("conversation");
                 setInput(
-                  `Find a good spontaneous detour around ${selectedArea?.name || selected?.title || trip.city}. I have 45 minutes.`,
+                  `Find a good spontaneous detour around ${selected?.title || trip.city}. I have 45 minutes.`,
                 );
               }}
             >
@@ -1985,8 +2012,18 @@ export default function App() {
             className={`map-neighborhood glass ${heatVisible ? "with-heat" : ""}`}
           >
             <MapPin size={14} />
-            <span>{day.title}</span>
-            <span className="map-place-count">{stops.length} stops</span>
+            <span>
+              {section === "conversation"
+                ? recommendations.length
+                  ? "Your discoveries"
+                  : mapCity
+                : day.title}
+            </span>
+            <span className="map-place-count">
+              {section === "conversation"
+                ? `${recommendations.length} places`
+                : `${stops.length} stops`}
+            </span>
           </div>
           {detail && (
             <article
@@ -2094,6 +2131,38 @@ export default function App() {
                     )}
                   </div>
                 )}
+                {!!selected?.openingHours?.weekdayDescriptions?.length && (
+                  <details className="stop-opening-hours">
+                    <summary>
+                      <Clock3 size={13} /> Weekly opening hours{" "}
+                      <ChevronDown size={12} />
+                    </summary>
+                    <ul>
+                      {selected.openingHours.weekdayDescriptions.map(
+                        (hours, index) => (
+                          <li key={index}>{hours}</li>
+                        ),
+                      )}
+                    </ul>
+                    <p>
+                      Google listing
+                      {selected.fetchedAt
+                        ? ` · retrieved ${new Date(selected.fetchedAt).toLocaleDateString()}`
+                        : ""}
+                      . Check the venue for your visit date; holiday hours can
+                      differ.
+                    </p>
+                    {selected.websiteUri && (
+                      <a
+                        href={selected.websiteUri}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Check the venue website <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </details>
+                )}
                 <p className="detail-description">
                   {hotspot?.story || selected?.description}
                 </p>
@@ -2189,7 +2258,7 @@ export default function App() {
               </div>
             </article>
           )}
-          {firstDetour && !heatVisible && (
+          {firstDetour && !heatVisible && section !== "conversation" && (
             <button
               className="detour-card glass"
               onClick={() => {
@@ -2795,7 +2864,64 @@ export default function App() {
             <h2>Meet you there.</h2>
             <p>Bring your itinerary into the calendar you already use.</p>
           </div>
-          <button className="calendar-option" onClick={exportCalendar}>
+          {!calendarTimeZone && (
+            <div className="calendar-timezone">
+              <label className="form-field">
+                Destination time zone
+                <input
+                  list="destination-timezones"
+                  value={calendarZoneDraft}
+                  onChange={(e) => setCalendarZoneDraft(e.target.value)}
+                  placeholder="e.g. Europe/London"
+                />
+                <datalist id="destination-timezones">
+                  {[
+                    "America/New_York",
+                    "America/Los_Angeles",
+                    "Europe/London",
+                    "Europe/Paris",
+                    "Asia/Tokyo",
+                    "Asia/Singapore",
+                    "Australia/Sydney",
+                    "UTC",
+                  ].map((zone) => (
+                    <option key={zone} value={zone} />
+                  ))}
+                </datalist>
+              </label>
+              <p className="form-note">
+                Choose the destination’s time zone so reminders appear at the
+                right local time.
+              </p>
+              <button
+                className="button secondary"
+                onClick={() => {
+                  const zone = calendarZoneDraft.trim();
+                  try {
+                    new Intl.DateTimeFormat("en-US", {
+                      timeZone: zone,
+                    }).format();
+                  } catch {
+                    return notify(
+                      "Choose a valid destination time zone, such as Europe/London.",
+                    );
+                  }
+                  setUndoTrip(clone(trip));
+                  setTrip((t) => ({ ...t, timeZone: zone }));
+                  notify(
+                    "Destination time zone saved. Your calendar is ready.",
+                  );
+                }}
+              >
+                Save time zone
+              </button>
+            </div>
+          )}
+          <button
+            className="calendar-option"
+            onClick={exportCalendar}
+            disabled={!calendarTimeZone}
+          >
             <span className="connection-icon">
               <ArrowDownToLine size={22} />
             </span>
@@ -2808,7 +2934,11 @@ export default function App() {
           <h3 className="small-heading">Or add one stop to Google Calendar</h3>
           <div className="calendar-stop-list">
             {stops.map((s) => (
-              <button key={s.id} onClick={() => calendarStop(s)}>
+              <button
+                key={s.id}
+                onClick={() => calendarStop(s)}
+                disabled={!calendarTimeZone}
+              >
                 <span>{s.time.replace(/^0/, "")}</span>
                 <strong>{s.title}</strong>
                 <ExternalLink size={14} />
@@ -2816,8 +2946,11 @@ export default function App() {
             ))}
           </div>
           <p className="form-note">
-            Times use the destination’s time zone. Calendar reminders don’t
-            include admission or confirmed reservations.
+            {calendarTimeZone
+              ? `Times use ${calendarTimeZone}. `
+              : "A destination time zone is needed before exporting. "}
+            Calendar reminders don’t include admission or confirmed
+            reservations.
           </p>
         </Modal>
       )}

@@ -320,12 +320,14 @@ export async function generateLivePlan(
       stops,
     };
   });
-  let timezone = "UTC";
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: parsed.timezone }).format();
-    timezone = parsed.timezone;
-  } catch {
-    /* UTC fallback is explicitly retained. */
+  let timezone: string | undefined;
+  if (typeof parsed.timezone === "string" && parsed.timezone.trim()) {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: parsed.timezone }).format();
+      timezone = parsed.timezone;
+    } catch {
+      /* Unknown zones remain absent; calendar export requires a chosen zone. */
+    }
   }
   return {
     city: textInput(parsed.city, 180) || params.destination,
@@ -335,8 +337,7 @@ export async function generateLivePlan(
     vibe: textInput(parsed.vibe, 200) || params.vibe,
     days,
     trendyHotspots: [],
-    timezone,
-    timeZone: timezone,
+    ...(timezone ? { timezone, timeZone: timezone } : {}),
     source: "gemini",
     notice:
       "AI-generated suggestions. Venue details and map locations are not independently verified; use the venue lookup links before visiting. No live popularity or booking availability feed is connected.",

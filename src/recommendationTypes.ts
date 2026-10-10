@@ -57,6 +57,7 @@ export interface RecommendationResponse {
   notice?: string;
   fallback?: boolean;
   sources: RecommendationSource[];
+  destination?: { city: string; center?: [number, number]; timeZone?: string };
   mapsWidgetContextToken?: string;
   /** Google-provided Search entry point. Render in a sandboxed frame, never as arbitrary page HTML. */
   searchSuggestionsHtml?: string;

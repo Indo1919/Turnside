@@ -80,6 +80,7 @@ export function ConversationView({
   onStartLive: () => void;
 }) {
   const started = messages.length > 0;
+  const inNewYork = /new york|nyc/i.test(city);
   const lastReply = [...messages]
     .reverse()
     .find((m) => m.sender === "concierge");
@@ -125,7 +126,7 @@ export function ConversationView({
             <button
               onClick={() =>
                 onSend(
-                  "Find independent coffee shops and a bookstore around Greenwich Village. I have a relaxed afternoon.",
+                  `Find independent coffee shops and a bookstore around ${inNewYork ? "Greenwich Village, New York" : city}. I have a relaxed afternoon.`,
                 )
               }
             >
@@ -141,7 +142,7 @@ export function ConversationView({
             <button
               onClick={() =>
                 onSend(
-                  "Show me interesting shops and brands in SoHo, with source evidence for your recommendations.",
+                  `Show me interesting shops and brands in ${inNewYork ? "SoHo, New York" : city}, with source evidence for your recommendations.`,
                 )
               }
             >
@@ -157,7 +158,7 @@ export function ConversationView({
             <button
               onClick={() =>
                 onSend(
-                  "Plan a spontaneous afternoon in New York with a park, a cultural stop, and something good to eat.",
+                  `Plan a spontaneous afternoon in ${city} with a park, a cultural stop, and something good to eat.`,
                 )
               }
             >

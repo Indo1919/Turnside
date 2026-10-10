@@ -12,6 +12,14 @@ import { replanStops } from "../backend/integrations";
 import { INITIAL_TRIP } from "../src/demoData";
 import { itineraryTimezone } from "../src/services/calendarService";
 import { decodePolyline } from "../backend/routes";
+import {
+  buildSelectedTrip,
+  demoRecommendations,
+  resolveRecommendationDestination,
+  groundedRecommendations,
+} from "../backend/recommendations";
+import { generateLivePlan } from "../backend/integrations";
+import type { Recommendation } from "../src/recommendationTypes";
 
 async function api(
   options: Parameters<typeof createApiApp>[0],
@@ -80,6 +88,227 @@ async function api(
 const offline: typeof fetch = async () => {
   throw new Error("Offline fixture");
 };
+
+test("Current destination requests override old city and GPS, while stylistic city mentions do not", () => {
+  const switched = resolveRecommendationDestination({
+    query: "Find coffee in Tokyo",
+    city: "New York",
+    userLocation: [-74, 40.7],
+  });
+  assert.equal(switched.city, "Tokyo, Japan");
+  assert.deepEqual(switched.center, [139.6995, 35.6624]);
+  assert.equal(switched.destination.timeZone, "Asia/Tokyo");
+  assert.equal(switched.switched, true);
+  const styles = [
+    "Paris-style coffee shops",
+    "Find Tokyo-inspired coffee in New York",
+    "Coffee in a Paris-style café",
+    "A café with Paris inspired decor",
+  ];
+  for (const query of styles)
+    assert.equal(
+      resolveRecommendationDestination({ query, city: "New York" }).city,
+      "New York",
+      query,
+    );
+  const unsupported = demoRecommendations({
+    query: "Find coffee in London",
+    city: "New York",
+    userLocation: [-74, 40.7],
+  });
+  assert.equal(unsupported.destination?.city, "London");
+  assert.equal(unsupported.destination?.center, undefined);
+  assert.equal(unsupported.destination?.timeZone, undefined);
+  assert.deepEqual(unsupported.recommendations, []);
+  assert.match(unsupported.reply, /does not cover London/);
+  assert.equal(
+    demoRecommendations({ query: "Find coffee", city: "Lisbon" })
+      .recommendations.length,
+    0,
+  );
+  assert.equal(
+    demoRecommendations({ query: "Coffee in Paris", city: "New York" })
+      .destination?.timeZone,
+    "Europe/Paris",
+  );
+});
+
+test("Grounded destination override biases Maps to the requested city rather than stale GPS", async () => {
+  let tool: any;
+  const provider: typeof fetch = async (_input, init) => {
+    tool = JSON.parse(String(init?.body)).tools[0];
+    return new Response(
+      JSON.stringify({
+        steps: [
+          {
+            type: "model_output",
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify({
+                  reply: "What kind of coffee do you like?",
+                  recommendations: [],
+                }),
+              },
+            ],
+          },
+        ],
+      }),
+    );
+  };
+  const result = await groundedRecommendations(
+    {
+      query: "Find coffee in Tokyo",
+      city: "New York",
+      userLocation: [-74, 40.7],
+    },
+    provider,
+    { GEMINI_API_KEY: "private-fixture" },
+    "gemini-3.8-flash",
+  );
+  assert.equal(result.destination?.city, "Tokyo, Japan");
+  assert.equal(tool.latitude, 35.6624);
+  assert.equal(tool.longitude, 139.6995);
+});
+
+function selectedCard(overrides: Partial<Recommendation> = {}): Recommendation {
+  return {
+    id: "selected-place",
+    title: "Selected venue",
+    city: "New York",
+    category: "niche",
+    categoryLabel: "Shop",
+    description: "Visit",
+    reason: "Chosen by traveler",
+    durationMinutes: 60,
+    coordinates: [-74, 40.7],
+    source: "google-places",
+    sourceLabel: "Google Maps",
+    verified: true,
+    attributions: [],
+    ...overrides,
+  };
+}
+test("Selected days reject midnight overflow and accept a visit ending exactly at midnight without a final buffer", () => {
+  const params = {
+    destination: "New York",
+    durationDays: 1,
+    pacing: "relaxed",
+    startDate: "2026-10-10",
+  };
+  assert.throws(
+    () =>
+      buildSelectedTrip(
+        params,
+        Array.from({ length: 6 }, (_, i) =>
+          selectedCard({ id: "long-" + i, durationMinutes: 240 }),
+        ),
+      ),
+    /past midnight/,
+  );
+  const boundary = buildSelectedTrip(params, [
+    selectedCard({
+      category: "nightlife",
+      suggestedTime: "11:00 PM",
+      durationMinutes: 60,
+      openingHours: { weekdayDescriptions: ["Monday: 6PM–midnight"] },
+      websiteUri: "https://example.org/venue",
+      fetchedAt: "2026-10-10T12:00:00Z",
+    }),
+  ]);
+  const stop = boundary.days[0].stops[0];
+  assert.equal(stop.time, "11:00 PM");
+  assert.deepEqual(stop.openingHours?.weekdayDescriptions, [
+    "Monday: 6PM–midnight",
+  ]);
+  assert.equal(stop.websiteUri, "https://example.org/venue");
+  assert.equal(stop.fetchedAt, "2026-10-10T12:00:00Z");
+  assert.throws(
+    () =>
+      buildSelectedTrip(params, [
+        selectedCard({ suggestedTime: "11:30 PM", durationMinutes: 60 }),
+      ]),
+    /past midnight/,
+  );
+  const custom = buildSelectedTrip({ ...params, destination: "Lisbon" }, [
+    selectedCard({ city: "Lisbon", coordinates: [-9.14, 38.72] }),
+  ]);
+  assert.equal(custom.timeZone, undefined);
+  assert.equal(custom.timezone, undefined);
+  assert.equal(boundary.timeZone, "America/New_York");
+});
+
+test("Paris, Texas remains a custom destination rather than borrowing the France catalog", () => {
+  for (const params of [
+    { query: "Find coffee in Paris, Texas", city: "New York" },
+    { query: "Find coffee", city: "Paris, Texas" },
+  ]) {
+    const result = demoRecommendations(params);
+    assert.equal(result.destination?.city, "Paris, Texas");
+    assert.equal(result.destination?.center, undefined);
+    assert.equal(result.destination?.timeZone, undefined);
+    assert.deepEqual(result.recommendations, []);
+  }
+  const plan = buildSelectedTrip(
+    {
+      destination: "Paris, Texas",
+      durationDays: 1,
+      pacing: "relaxed",
+      startDate: "2026-10-10",
+    },
+    [selectedCard({ city: "Paris, Texas", coordinates: [-95.5555, 33.6609] })],
+  );
+  assert.equal(plan.city, "Paris, Texas");
+  assert.deepEqual(plan.center, [-95.5555, 33.6609]);
+  assert.equal(plan.timeZone, undefined);
+  assert.equal(
+    demoRecommendations({
+      query: "Find coffee in Paris, France",
+      city: "New York",
+    }).destination?.timeZone,
+    "Europe/Paris",
+  );
+});
+
+test("Invalid legacy custom-city timezone is omitted instead of silently changed to UTC", async () => {
+  const plan = await generateLivePlan(
+    {
+      destination: "Lisbon",
+      durationDays: 1,
+      pacing: "relaxed",
+      startDate: "2026-10-10",
+    },
+    async () =>
+      JSON.stringify({
+        city: "Lisbon",
+        center: [-9.14, 38.72],
+        timezone: "Invalid/Zone",
+        summary: "Visit",
+        vibe: "Calm",
+        days: [
+          {
+            title: "Day",
+            stops: [
+              {
+                id: "cafe",
+                title: "Example cafe",
+                time: "11:00 AM",
+                durationMinutes: 45,
+                category: "cafe",
+                categoryLabel: "Coffee",
+                coordinates: [-9.14, 38.72],
+                address: "Lisbon",
+                description: "A suggested cafe",
+                ticketRequired: false,
+              },
+            ],
+          },
+        ],
+      }),
+  );
+  assert.equal(plan.timeZone, undefined);
+  assert.equal(plan.timezone, undefined);
+});
 
 test("Conversation can begin without an itinerary; sample cards carry exact selected identities into a plan", async () => {
   await api({ fetcher: offline, env: {} }, async (request) => {

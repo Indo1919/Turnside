@@ -66,6 +66,115 @@ function nameMatch(a: string, b: string): boolean {
     smaller.filter((t) => larger.includes(t)).length / smaller.length >= 0.75
   );
 }
+
+/** Only a geographical request changes destination; descriptive city styles do not. */
+function catalogDestinationKey(city: string): string | undefined {
+  const value = city.trim();
+  if (
+    /^(?:New\s+York(?:\s+City)?|NYC|NY|Manhattan)(?:\s*,?\s*(?:USA|US|United States))?$/i.test(
+      value,
+    )
+  )
+    return "newyork";
+  if (/^Tokyo(?:\s*,?\s*Japan)?$/i.test(value)) return "tokyo";
+  if (/^Paris(?:\s*,?\s*France)?$/i.test(value)) return "paris";
+  return undefined;
+}
+function explicitDestination(query: string): string | undefined {
+  const text = textInput(query, 3000);
+  const alias = "(?:New\\s+York(?:\\s+City)?|NYC|Manhattan|Tokyo|Paris)";
+  const known =
+    text.match(
+      new RegExp(
+        `\\b(?:in|around|near|to|visit|visiting|explore|exploring)\\s+(${alias})(?![\\w-])`,
+        "i",
+      ),
+    ) ||
+    text.match(
+      new RegExp(
+        `\\b(${alias})\\s+(?:trip|vacation|holiday|itinerary)\\b`,
+        "i",
+      ),
+    ) ||
+    text.match(new RegExp(`^(${alias})$`, "i"));
+  if (known) {
+    const suffix = text
+      .slice((known.index || 0) + known[0].length)
+      .match(/^,\s*([\p{L}][\p{L} .-]*)/u)?.[1]
+      .split(
+        /\s+(?:with|and|for|next|this|tomorrow|today|where|that|but|please|on|at|from)\b|[,;.!?]/i,
+      )[0]
+      .trim();
+    if (
+      suffix &&
+      !/^(?:please|with|and|for|coffee|caf[eé]|shops?|food|parks?|museums?|art|culture)\b/i.test(
+        suffix,
+      )
+    ) {
+      const qualified = `${known[1]}, ${suffix}`;
+      const qualifiedKey = catalogDestinationKey(qualified);
+      return qualifiedKey ? CATALOGS[qualifiedKey].city : qualified;
+    }
+    const key = cityKeyFor(known[1]);
+    if (key) return CATALOGS[key].city;
+  }
+  const matches = [
+    ...text.matchAll(
+      /\b(?:in|around|near|to|visit|visiting|explore|exploring)\s+([\p{L}][\p{L}\p{M}'’ .-]*)/giu,
+    ),
+  ];
+  for (const match of matches.reverse()) {
+    const place = match[1]
+      .split(
+        /\s+(?:with|and|for|next|this|tomorrow|today|where|that|but|please|on|at|from)\b|[,;.!?]/i,
+      )[0]
+      .trim();
+    if (
+      !place ||
+      /^(?:a|an|the|me|my|our|your|us|some|any|it|there|here)\b/i.test(place) ||
+      /(?:-style|style|inspired|vibe|mood|coffee|caf[eé]|restaurant|shop|museum|park|walk|food|outdoor|minute|hour|day|bookstore)/i.test(
+        place,
+      ) ||
+      place.split(/\s+/).length > 4
+    )
+      continue;
+    if (
+      /^(?:soho|greenwich village|lower east side|dumbo|midtown|chelsea)$/i.test(
+        place,
+      )
+    )
+      continue;
+    return place;
+  }
+  return undefined;
+}
+
+export function resolveRecommendationDestination(params: DiscoverParams) {
+  const requested = explicitDestination(params.query);
+  const current = textInput(params.city, 180) || "New York";
+  const key = catalogDestinationKey(requested || current);
+  const city = key ? CATALOGS[key].city : requested || current;
+  const currentKey = catalogDestinationKey(current);
+  const switched = Boolean(
+    requested &&
+    normalized(city) !==
+      normalized(currentKey ? CATALOGS[currentKey].city : current),
+  );
+  const center =
+    !switched && validCoordinates(params.userLocation)
+      ? params.userLocation
+      : key
+        ? CATALOGS[key].center
+        : undefined;
+  const destination: NonNullable<RecommendationResponse["destination"]> = {
+    city,
+    ...(key
+      ? { center: CATALOGS[key].center, timeZone: CATALOGS[key].timezone }
+      : {}),
+  };
+  return { key, city, center, destination, switched };
+}
+
 export function demoRecommendations(
   params: DiscoverParams,
 ): RecommendationResponse {
@@ -74,11 +183,18 @@ export function demoRecommendations(
       ?.slice(-8)
       .map((m) => textInput(m.text, 1000))
       .join(" ") || "";
-  const cityKey =
-    cityKeyFor(params.city || "") ||
-    cityKeyFor(`${params.query} ${history}`) ||
-    cityKeyFor("New York")!;
-  const catalog = CATALOGS[cityKey] || CATALOGS[cityKeyFor("New York")!];
+  const resolved = resolveRecommendationDestination(params);
+  const catalog = resolved.key ? CATALOGS[resolved.key] : undefined;
+  if (!catalog)
+    return {
+      success: true,
+      source: "demo",
+      destination: resolved.destination,
+      reply: `The sample catalog does not cover ${resolved.city}. Choose New York, Tokyo or Paris for sample places, or connect Live AI to search this destination.`,
+      recommendations: [],
+      sources: [],
+      notice: `No sample places or coordinates were substituted for ${resolved.city}.`,
+    };
   const query = `${params.query} ${history}`.toLowerCase();
   const pickCategory =
     requestedCategory(params.category || "") || requestedCategory(query);
@@ -93,6 +209,7 @@ export function demoRecommendations(
         "I can take you to the venue’s official booking page to check availability. No tickets or payments have been booked in this prototype.",
       recommendations: [],
       sources: [],
+      destination: resolved.destination,
       notice:
         "Sample conversation. Reservations and purchases are completed directly with the provider.",
     };
@@ -162,6 +279,7 @@ export function demoRecommendations(
   return {
     success: true,
     source: "demo",
+    destination: resolved.destination,
     reply: selected.length
       ? `Here are three sample picks in ${catalog.city} based on what you mentioned. Choose the ones you like and I’ll arrange your day. Would you prefer a relaxed walk or a fuller schedule?`
       : `What would make a good day for you in ${catalog.city}: coffee and a walk, art and independent shops, or a food-focused afternoon? Tell me your time window and how much walking you want.`,
@@ -218,16 +336,8 @@ export async function groundedRecommendations(
   env: Record<string, string | undefined>,
   model: string,
 ): Promise<RecommendationResponse> {
-  const key = cityKeyFor(params.city || "") || cityKeyFor(params.query);
-  const city =
-    textInput(params.city, 180) || (key ? CATALOGS[key].city : "New York");
-  const center = validCoordinates(params.userLocation)
-    ? params.userLocation
-    : key
-      ? CATALOGS[key].center
-      : cityKeyFor(city)
-        ? CATALOGS[cityKeyFor(city)!].center
-        : undefined;
+  const { city, center, destination } =
+    resolveRecommendationDestination(params);
   const context = {
     city,
     area: textInput(params.areaId, 100),
@@ -453,9 +563,18 @@ export async function groundedRecommendations(
         }),
     )
   ).filter((p): p is Recommendation => Boolean(p));
+  const located = recommendations.filter((p) =>
+    validCoordinates(p.coordinates),
+  );
+  if (!destination.center && located.length)
+    destination.center = [
+      located.reduce((sum, p) => sum + p.coordinates![0], 0) / located.length,
+      located.reduce((sum, p) => sum + p.coordinates![1], 0) / located.length,
+    ];
   return {
     success: true,
     source: "gemini",
+    destination,
     reply: textInput(parsed.reply, 5000),
     recommendations,
     sources: sources
@@ -481,7 +600,7 @@ export function createRecommendationStore() {
       while (records.size > 200) records.delete(records.keys().next().value!);
     },
     resolve(ids: string[], city: string): Recommendation[] {
-      const catalog = CATALOGS[cityKeyFor(city) || ""];
+      const catalog = CATALOGS[catalogDestinationKey(city) || ""];
       return ids.map((id) => {
         const live = records.get(id);
         const candidate =
@@ -524,7 +643,7 @@ export function buildSelectedTrip(
     selected.length > params.durationDays * 6
   )
     throw new Error("Select 1 to 6 places per day.");
-  const catalog = CATALOGS[cityKeyFor(params.destination) || ""];
+  const catalog = CATALOGS[catalogDestinationKey(params.destination) || ""];
   const source = selected.some((p) => p.source !== "editorial-demo")
     ? "gemini"
     : "demo";
@@ -538,7 +657,6 @@ export function buildSelectedTrip(
         summary: "Your selected places, arranged into a flexible day.",
         days: [],
         trendyHotspots: [],
-        timeZone: "UTC",
       };
   const anchor = new Date(
     `${params.startDate || new Date().toISOString().slice(0, 10)}T12:00:00Z`,
@@ -580,8 +698,19 @@ export function buildSelectedTrip(
               ? 19 * 60
               : 9 * 60),
       );
+      if (
+        !Number.isInteger(p.durationMinutes) ||
+        p.durationMinutes <= 0 ||
+        clock >= 1440 ||
+        clock + p.durationMinutes > 1440
+      )
+        throw new Error(
+          "These stops run past midnight. Choose fewer places, shorter visits, or another day.",
+        );
       const time = formatMinutes(clock);
-      clock += p.durationMinutes + (params.pacing === "relaxed" ? 40 : 25);
+      clock +=
+        p.durationMinutes +
+        (i < places.length - 1 ? (params.pacing === "relaxed" ? 40 : 25) : 0);
       return {
         id: p.id,
         title: p.title,
@@ -604,6 +733,9 @@ export function buildSelectedTrip(
         googlePlaceId: p.googlePlaceId,
         source: p.source,
         attributions: p.attributions,
+        openingHours: p.openingHours,
+        websiteUri: p.websiteUri,
+        fetchedAt: p.fetchedAt,
       } as ItineraryStop;
     });
     return {

@@ -9,12 +9,13 @@ On this Mac, double-click `start.command`, then open **http://localhost:4173**. 
 On another computer, install Node.js 22.12+ or 24+, then run:
 
 ```sh
-npm install
-npm run build
-npm start
+npm install --global pnpm@11.25.0
+pnpm install --frozen-lockfile
+pnpm build
+pnpm start
 ```
 
-Copy `.env.example` to `.env.local`; `PORT=4173` keeps the same URL. Without a port setting the server uses 3000. `npm run dev` starts development. Internet access is needed for map tiles, public datasets, weather and Google Maps.
+Copy `.env.example` to `.env.local`; `PORT=4173` keeps the same URL. Without a port setting the server uses 3000. `pnpm dev` starts development. Internet access is needed for map tiles, public datasets, weather and Google Maps.
 
 ## A two-minute walkthrough
 
@@ -22,8 +23,8 @@ Copy `.env.example` to `.env.local`; `PORT=4173` keeps the same URL. Without a p
 2. Explore the visual recommendation cards and their sources. Choose places, then select **Make this my day**. The itinerary uses those exact places rather than substituting unrelated venues.
 3. Open **My itinerary**. Select a stop for details and directions, mark it visited, or try **Running a little late?** to adjust the remaining day.
 4. Open **Hot areas**. The glows animate gently. Compare Food scene, Culture and Outdoors; select SoHo, Greenwich Village or another area. Its panel shows coffee, shops and cultural detours as cards, with venue evidence and clearly labeled photos. Expand **Why this pick & sources** to inspect provenance.
-5. Add a detour to the day. Without an active stop it appends after the existing itinerary. **What’s worth a detour here?** starts a neighborhood-focused conversation. **Find a good detour** lets you ask for a spontaneous change.
-6. Export the day to a calendar or continue to an official ticket provider. Purchases and reservations are never simulated. Settings expose connection status, reset the sample, and open the brand kit.
+5. Add a detour to the day. Without an active stop it appends after the existing itinerary. With an active stop it fits into the remaining schedule; confirmed reservations and visited/skipped history stay fixed, and collisions are explained before changing anything. **What’s worth a detour here?** starts a neighborhood-focused conversation. **Find a good detour** lets you ask for a spontaneous change.
+6. Export the day to a calendar or continue to an official ticket provider. For a destination without a resolved timezone, choose its timezone before exporting. Purchases and reservations are never simulated. Settings expose connection status, reset the sample, and open the brand kit.
 
 ## Connect Gemini and Google
 
@@ -34,7 +35,7 @@ Open **http://localhost:4173/setup.html** for the connection guide. Keep all pri
 - Private `GOOGLE_MAPS_SERVER_KEY` (or separate Places/Routes keys) provides authoritative place coordinates, reviews, hours and street routes. Grounded citations without resolved locations remain explorable but cannot be scheduled.
 - Optional, restricted `GOOGLE_MAPS_BROWSER_KEY` enables the full custom Google basemap and overlays. The intentionally public browser key is separate from private server keys.
 
-No provider account was configured during delivery, so real Gemini/Places/Routes sessions remain unverified. The app does not substitute browser speech or pretend a sample response is Gemini.
+Provider keys have not been configured during delivery, so real Gemini/Places/Routes sessions remain unverified. The app does not substitute browser speech or pretend a sample response is Gemini.
 
 ## Maps and trustworthy signals
 
@@ -51,12 +52,12 @@ Open **http://localhost:4173/brand-kit/index.html**. The kit includes primary/re
 ## Verification and teammate integration
 
 ```sh
-npm run lint
-npm test
-npm run build
+pnpm lint
+pnpm test
+pnpm build
 ```
 
-The delivered version passes **43 automated checks**, TypeScript validation and a production build. Browser QA covered conversation → selected places → itinerary, hot-area cards/evidence → add a detour, the keyless Google viewer, and desktop/400px phone layouts. The initial app bundle is split from map code. Mocked provider tests verify contracts and cleanup, not account connectivity.
+The delivered version passes **64 automated checks**, TypeScript validation and a production build. GitHub Actions runs the same checks on pushes and pull requests, using the committed dependency lockfile. Browser QA covered conversation → selected places → itinerary, hot-area cards/evidence → add a detour, the keyless Google viewer, and desktop/400px phone layouts. The initial app bundle is split from map code. Mocked provider tests verify contracts and cleanup, not account connectivity.
 
 The supplied Sidequest project informed the grounded recommendations → Places → Routes architecture and secure Live voice flow. These fit the existing React/Express app; its separate database/worker stack was not imported. See `INTEGRATIONS.md` for contracts and official references.
 

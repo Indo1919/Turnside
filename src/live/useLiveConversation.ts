@@ -101,6 +101,8 @@ function readableError(error: unknown): string {
 export function useLiveConversation(options: LiveConversationOptions) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
+  const discoveredDestination =
+    useRef<RecommendationResponse["destination"]>(undefined);
   const mounted = useRef(true);
   const [status, setStatus] = useState<LiveConversationStatus>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -160,6 +162,7 @@ export function useLiveConversation(options: LiveConversationOptions) {
     output.current?.close();
     output.current = null;
     resumeHandle.current = null;
+    discoveredDestination.current = undefined;
     if (mounted.current) {
       setSpeaking(false);
       setLevel(0);
@@ -226,7 +229,8 @@ export function useLiveConversation(options: LiveConversationOptions) {
                   city:
                     typeof args.city === "string"
                       ? args.city
-                      : optionsRef.current.city,
+                      : discoveredDestination.current?.city ||
+                        optionsRef.current.city,
                   forceDemo: false,
                 },
                 controller.signal,
@@ -237,6 +241,8 @@ export function useLiveConversation(options: LiveConversationOptions) {
                 connectionEpoch.current !== epoch
               )
                 return;
+              discoveredDestination.current =
+                result.destination || discoveredDestination.current;
               optionsRef.current.onDiscovery?.(result);
               // Preserve provider identity, citations and fallback notices in the model result.
               modelResult = {
@@ -257,9 +263,10 @@ export function useLiveConversation(options: LiveConversationOptions) {
                 "/api/gemini/plan",
                 {
                   destination:
-                    typeof args.destination === "string"
+                    discoveredDestination.current?.city ||
+                    (typeof args.destination === "string"
                       ? args.destination
-                      : optionsRef.current.city,
+                      : optionsRef.current.city),
                   durationDays: Math.min(
                     3,
                     Math.max(1, Math.floor(Number(args.durationDays) || 1)),
@@ -272,7 +279,7 @@ export function useLiveConversation(options: LiveConversationOptions) {
                   preferredPlaceIds: Array.isArray(args.preferredPlaceIds)
                     ? args.preferredPlaceIds
                         .filter((id) => typeof id === "string")
-                        .slice(0, 24)
+                        .slice(0, 18)
                     : undefined,
                   startDate:
                     typeof args.startDate === "string" &&
@@ -415,7 +422,7 @@ export function useLiveConversation(options: LiveConversationOptions) {
     post<LiveSessionResponse>(
       "/api/live/session",
       {
-        city: optionsRef.current.city,
+        city: discoveredDestination.current?.city || optionsRef.current.city,
         contextSummary: optionsRef.current.contextSummary || "",
       },
       signal,

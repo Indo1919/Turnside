@@ -51,6 +51,14 @@ export interface ItineraryStop {
   attributions?: { provider: string; providerUri?: string }[];
   sourceUrl?: string;
   bookingUrl?: string;
+  websiteUri?: string;
+  fetchedAt?: string;
+  openingHours?: {
+    weekdayDescriptions?: string[];
+    openNow?: boolean;
+    nextOpenTime?: string;
+    nextCloseTime?: string;
+  };
   id: string;
   title: string;
   time: string;

@@ -21,6 +21,8 @@ const normalizeName = (name: string) =>
 
 // A search can return the wrong branch. Keep the editorial place intact unless
 // the returned name and map position both match the intended local venue.
+// Review evidence stays on the card; its independently sourced editorial
+// coordinates remain the ones used when adding the venue to the itinerary.
 export function applyGoogleDiscoveryEvidence(
   card: DiscoveryCard,
   place: GooglePlaceDetails,
@@ -71,7 +73,6 @@ export function applyGoogleDiscoveryEvidence(
   const sourceUrl = place.googleMapsUri || card.links.googleMaps;
   return {
     ...card,
-    coordinates: place.coordinates,
     links: { ...card.links, googleMaps: sourceUrl },
     popularity: signalPresent
       ? {

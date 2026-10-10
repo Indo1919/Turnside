@@ -2165,3 +2165,44 @@ body {
     order: 1;
   }
 }
+
+.stop-opening-hours {
+  border: 1px solid var(--line, #e5e5ea);
+  border-radius: 12px;
+  margin: 12px 0;
+  padding: 12px;
+  font-size: 12px;
+  color: #63666d;
+}
+.stop-opening-hours summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #1d1d1f;
+  cursor: pointer;
+  font-weight: 600;
+}
+.stop-opening-hours summary > svg:last-child {
+  margin-left: auto;
+}
+.stop-opening-hours ul {
+  padding: 0;
+  margin: 12px 0;
+  list-style: none;
+  line-height: 1.7;
+}
+.stop-opening-hours p {
+  font-size: 11px;
+  line-height: 1.5;
+  margin: 8px 0;
+}
+.stop-opening-hours a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #007aff;
+  font-weight: 600;
+}
+.calendar-timezone {
+  margin: 16px 0 24px;
+}

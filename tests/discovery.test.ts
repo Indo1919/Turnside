@@ -100,6 +100,20 @@ test("a matched live Places result exposes actual rating, review count and retri
   assert.equal(card.popularity.status, "unavailable");
 });
 
+test("review evidence keeps independently sourced itinerary coordinates", () => {
+  const matchedCoordinates: [number, number] = [
+    card.coordinates[0] + 0.0001,
+    card.coordinates[1],
+  ];
+  const enriched = applyGoogleDiscoveryEvidence(
+    card,
+    google({ coordinates: matchedCoordinates }),
+  );
+  assert.equal(enriched.popularity.status, "google-review-signal");
+  assert.deepEqual(enriched.coordinates, card.coordinates);
+  assert.notDeepEqual(enriched.coordinates, matchedCoordinates);
+});
+
 test("wrong branches, wrong brands and missing venue location cannot inherit a popularity signal", () => {
   assert.throws(
     () =>
