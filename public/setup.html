@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <meta charset="utf-8" /><meta
+    name="viewport"
+    content="width=device-width,initial-scale=1"
+  /><title>Turnside · Connection guide</title
+  ><style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      font:
+        16px/1.6 -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
+    }
+    main {
+      max-width: 780px;
+      margin: 50px auto;
+      padding: 36px;
+      background: white;
+      border: 1px solid #e5e5ea;
+      border-radius: 24px;
+    }
+    header {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      font-weight: 700;
+      font-size: 22px;
+    }
+    header img {
+      width: 32px;
+    }
+    h1 {
+      font-size: 38px;
+      letter-spacing: -1px;
+      line-height: 1.15;
+    }
+    h2 {
+      font-size: 20px;
+      margin-top: 30px;
+    }
+    p,
+    li {
+      color: #63666d;
+    }
+    a {
+      color: #007aff;
+    }
+    pre {
+      background: #f5f7fb;
+      padding: 20px;
+      border-radius: 14px;
+      font-size: 13px;
+      overflow: auto;
+      color: #2d3748;
+    }
+    code {
+      font-size: 13px;
+    }
+    small {
+      display: block;
+      color: #63666d;
+    }
+    aside {
+      padding: 16px;
+      background: #fff4ef;
+      border-radius: 14px;
+      color: #754535;
+    }
+    @media (max-width: 700px) {
+      main {
+        margin: 16px;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 30px;
+      }
+    }
+  </style>
+  <main>
+    <header><img src="/turnside.svg" alt="" />turnside.</header>
+    <h1>Bring your connections<br />to life.</h1>
+    <p>
+      This guide is for the person running the prototype. The sample
+      conversation, NYC hot areas, calendar export and map work without keys.
+    </p>
+    <h2>1. Connect Gemini</h2>
+    <p>
+      Copy <code>.env.example</code> to <code>.env.local</code> in the app
+      folder. Add your private key, then restart the app.
+    </p>
+    <pre>
+GEMINI_API_KEY=your_private_key
+GEMINI_MODEL=gemini-3.8-flash
+GEMINI_VOICE_ENABLED=true
+GEMINI_LIVE_ENABLED=true
+GEMINI_TTS_VOICE=Kore</pre>
+    <p>
+      Get a key through
+      <a
+        href="https://aistudio.google.com/apikey"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Google AI Studio</a
+      >. Keep it on the server. Never paste private keys into the app or commit
+      them.
+    </p>
+    <small
+      >Live voice uses gemini-3.8-live. Recorded voice input uses Gemini 3.8
+      Flash; Listen uses Gemini 3.8 Flash TTS. Account/model access and provider
+      credits are required.</small
+    >
+    <h2>2. Resolve live places and routes</h2>
+    <p>
+      Enable Places API (New) and Routes API in your Google Cloud project, then
+      configure a private server key. Separate keys can also be used; see the
+      included integration guide.
+    </p>
+    <pre>GOOGLE_MAPS_SERVER_KEY=your_private_server_key</pre>
+    <p>
+      This supplies real place identities and coordinates for selectable live
+      recommendations. Without Places, grounded citations can be explored on
+      Google Maps but cannot be added to a scheduled day.
+    </p>
+    <h2>3. Enable the full Google basemap (optional)</h2>
+    <p>
+      The free Google Maps viewer is already included. For Google Maps with
+      custom pins and area overlays, enable Maps JavaScript API and use a
+      separate browser key restricted to the app origin.
+    </p>
+    <pre>GOOGLE_MAPS_BROWSER_KEY=your_restricted_browser_key</pre>
+    <aside>
+      Provider configuration is not a verified connection. Test search, voice
+      and places with your account before a live demo. No ticket purchase or
+      reservation is made automatically.
+    </aside>
+    <p>
+      <a href="/">Return to Turnside →</a> ·
+      <a href="/brand-kit/index.html">View brand kit</a>
+    </p>
+  </main>
+</html>

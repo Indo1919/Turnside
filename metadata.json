@@ -1,0 +1,8 @@
+{
+  "name": "Turnside",
+  "description": "A conversational city planner with an interactive NYC map, editable itineraries, local discoveries, weather, calendar export, and official ticket links.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,14 @@
+:root {
+  --turnside-way-blue: #007AFF;
+  --turnside-detour-coral: #EF6B50;
+  --turnside-scene-mint: #83C9AA;
+  --turnside-scene-amber: #EDCB65;
+  --turnside-ink: #1d1d1f;
+  --turnside-secondary-text: #63666D;
+  --turnside-paper: #FFFFFF;
+  --turnside-canvas: #F5F5F7;
+  --turnside-line: #E5E5EA;
+  --turnside-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --turnside-radius-button: 12px;
+  --turnside-radius-card: 16px;
+}
